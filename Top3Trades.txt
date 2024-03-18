@@ -1,0 +1,77 @@
+Sub Top3Trades()
+    Dim ws As Worksheet
+    Dim lastRow As Long, i As Long
+    Dim dict As Object
+    Dim sector As String, fillNotional As Double, company As String, ticker As String, clientType As String
+    Dim outputString As String
+    Dim excludedClients As Object
+    Dim clientName As String
+    
+    ' Set ws to the APAC_Input sheet
+    Set ws = ThisWorkbook.Sheets("APAC_Input")
+    Set dict = CreateObject("Scripting.Dictionary")
+    Set excludedClients = CreateObject("Scripting.Dictionary")
+    lastRow = ws.Cells(ws.Rows.Count, "B").End(xlUp).Row
+    
+    ' Get the list of excluded clients from column R of the Main sheet
+    With ThisWorkbook.Sheets("Main")
+        lastRow = .Cells(.Rows.Count, "R").End(xlUp).Row
+        For i = 2 To lastRow
+            clientName = .Cells(i, "R").Value
+            If Not excludedClients.Exists(clientName) Then
+                excludedClients.Add clientName, 1
+            End If
+        Next i
+    End With
+    
+    lastRow = ws.Cells(ws.Rows.Count, "B").End(xlUp).Row
+    For i = 2 To lastRow
+        sector = ws.Cells(i, "B").Value
+        fillNotional = ws.Cells(i, "I").Value
+        company = ws.Cells(i, "F").Value
+        ticker = ws.Cells(i, "E").Value
+        clientType = ws.Cells(i, "A").Value
+        clientName = ws.Cells(i, "D").Value
+        
+        ' Skip the clients that are in the excluded list
+        If excludedClients.Exists(clientName) Then
+            GoTo NextIteration
+        End If
+        
+        If Not dict.Exists(sector) Then
+            dict.Add sector, New Collection
+        End If
+        
+        If dict(sector).Count < 3 Then
+            dict(sector).Add Array(fillNotional, company, ticker, clientType)
+        Else
+            If fillNotional > dict(sector)(1)(0) Then
+                dict(sector).Remove 1
+                dict(sector).Add Array(fillNotional, company, ticker, clientType)
+            ElseIf fillNotional > dict(sector)(2)(0) Then
+                dict(sector).Remove 2
+                dict(sector).Add Array(fillNotional, company, ticker, clientType)
+            ElseIf fillNotional > dict(sector)(3)(0) Then
+                dict(sector).Remove 3
+                dict(sector).Add Array(fillNotional, company, ticker, clientType)
+            End If
+        End If
+NextIteration:
+    Next i
+    
+    For Each key In dict.Keys
+        outputString = outputString & vbNewLine & "[" & key & "]: "
+        For i = 1 To dict(key).Count
+            outputString = outputString & "Bot $" & Format(dict(key)(i)(0) / 1000000, "0.0") & "m " & dict(key)(i)(1) & " (" & dict(key)(i)(2) & "), " & dict(key)(i)(3) & vbNewLine
+        Next i
+    Next key
+    
+    MsgBox outputString
+    
+    ' Paste the outputString to cell A1 in the Main sheet
+    With ThisWorkbook.Sheets("Main")
+        .Range("A1").Value = outputString
+        ' Resize row 1 to its default height
+        .Rows(1).EntireRow.AutoFit
+    End With
+End Sub
